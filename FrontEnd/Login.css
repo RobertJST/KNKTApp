@@ -1,0 +1,88 @@
+body {
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+    background-image: radial-gradient(circle, #272626 0%, #040404 100%);
+}
+
+.login-container {
+    background-color: rgb(22, 22, 22);
+    padding: 0px 30px 20px;
+    border-radius: 15px;
+    box-shadow: 0 0 20px rgba(32, 143, 108, 0.7);
+
+    font-size:40px;
+    text-align: center;
+    width: 240px;
+    border: 3px solid #20836a;
+}
+
+h2 {
+    color: #20836a;
+    text-align: center;
+    margin-top: 30px;
+    margin-bottom: -10px;
+}
+
+text {
+    color: #8f8f8f;
+    text-align: center;
+    font-size: 50%;
+}
+
+resp {
+    font-size: 15px;
+    color: #ae0000;
+}
+
+form {
+    margin-top: 5px;
+    display: flex;
+    flex-direction: column;
+}
+
+input {
+    background-color: #272626;
+    margin-bottom: 1rem;
+    padding: 0.5rem;
+    color: white;
+    border: 1px solid #d0d0d0;
+    border-radius: 4px;
+}
+
+input:focus {
+    outline: none;
+}
+
+.button-container {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    margin-top: 10px;
+}
+
+.green-button {
+    background-color: #20836a;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.grey-button {
+    background-color: #404040;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 3px;
+    cursor: pointer;
+    text-decoration: none;
+    font-size: 14px;
+}
+

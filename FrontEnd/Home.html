@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Home</title>
+    <link rel="stylesheet" href="Login.css">
+    <link rel="stylesheet" href="Home.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+
+</head>
+<body>
+    <div class="home">
+        <div class="sidebar">
+            <div id="username"></div>
+                <div class="searchbox">
+                    <input type="text" id="userSearch" placeholder="Find user...">
+                    <button id="searchBtn"><i class="fas fa-search"></i></button>
+                </div>
+            <div class="chat-list" id="chatList">
+            </div>
+            <div id="groups"><button id="groupBtn">Create Group</button></div>
+        </div>
+        <div class="chat-area" id="chatArea">
+            <div class="chat-header">
+                <div class="chat-title" id="chatTitle">No chat selected</div>
+                <div class="chat-actions">
+                </div>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="message-input">
+                <input type="text" id="messageInput" placeholder="Type a message...">
+                <button id="sendButton">Send</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="Home.js"></script>
+    <script src="ChatList.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+</body>
+</html>

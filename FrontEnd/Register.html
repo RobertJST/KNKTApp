@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register Page</title>
+    <link rel="stylesheet" href="Login.css">
+</head>
+<body>
+    <div class="login-container">
+        <h2>KNKT</h2>
+        <text>Register</text><br>
+        <resp id="Response"></resp>
+        <form id="registerForm">
+            <input type="text" name="username" placeholder="Username" required>
+            <input type="email" name="email" placeholder="Email" required>
+            <input type="password" name="password" placeholder="Password" required>
+            <input type="password" name="confirmPassword" placeholder="Confirm Password" required>
+            <div class="button-container">
+                <button type="submit" class="green-button">Register</button>
+                <a href="login.html" class="grey-button">Login</a>
+            </div>
+        </form>
+    </div>
+    <script src="Register.js"></script>
+</body>
+</html>
