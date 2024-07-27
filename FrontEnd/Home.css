@@ -134,9 +134,18 @@
     gap: 10px;
 }
 
-.chat-actions button {
+
+.delete-chat-btn {
     background: none;
     color: white;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2em;
+}
+
+.delete-chat-btn:hover {
+    background: none;
+    color: rgb(226, 0, 0);
     border: none;
     cursor: pointer;
     font-size: 1.2em;
@@ -168,6 +177,7 @@
     text-align: center;
     border: 1px solid #044e40;
     border-radius: 5px;
+    cursor: pointer;
 }
 
 

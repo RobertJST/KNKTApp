@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
         groups.innerHTML = '<button id="cancelBtn">Cancel</button><button id="createBtn">Create</button>';
         chatArea.innerHTML = `
             <div class="chat-header">
-                <div class="chat-title" id="chatTitle">No chat selected</div>
+                <div class="chat-title" id="chatTitle">No user selected</div>
                 <div class="chat-actions">
                 </div>
             </div>
@@ -42,12 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
         userSearch.value = '';   
         fetchSelected();
         document.getElementById('createBtn').addEventListener('click', Create);
-
-        // make search btn return a list of all users who are not in your current group
-        // create a list of users you will add to group
-        // click users name to add them to group, added udsers will appear in header of chatArea
-        // users who have been added will have an x near their name, if users is clicked again they are removed
-        // If user decides to send a message then the group chat will be made and all users will be added to it
     }
 
     function cancelGroup(){
@@ -56,10 +50,9 @@ document.addEventListener('DOMContentLoaded', () => {
         grouping = false;
         userSearch.value = '';
         newGroupMembers = [];    
-        fetchChatList();     
-        // clears list of users added to group
-        // returns default chatArea screen
-        // return searchBtn to normal function
+        fetchChatList();
+        const title = document.getElementById('chatTitle');
+        title.textContent = 'No chat selected';
     }
 
     function Create() {
@@ -155,7 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ participants, emails,  name: chatName, isGroup }),
             });
             const chat = await response.json();
-            openChat(chat.roomId, chat.name, chat.participants, chat.emails, chat.isGroup);
+            openChat(chat.roomId, chat.name, chat.participants, chat.isGroup, chat.emails);
             userSearch.value = '';
 
             otherUserEmails.forEach(email => {
@@ -224,7 +217,14 @@ document.addEventListener('DOMContentLoaded', () => {
             userItem.classList.remove('selected');
         }
         const title = document.getElementById('chatTitle');
-        title.textContent = newGroupMembers.filter(user => user.username !== currentUser.username).map(user => user.username).join(', ');
+
+        if (newGroupMembers.length > 0) {
+            title.textContent = newGroupMembers.filter(user => user.username !== currentUser.username).map(user => user.username).join(', ');
+
+        } else {
+            title.textContent = 'No users selected';
+
+        }
     }
 
     function displayChatList(chats) {
@@ -246,20 +246,19 @@ document.addEventListener('DOMContentLoaded', () => {
             chatItem.appendChild(nameElement);
             chatItem.appendChild(emailElement);
             
-            chatItem.addEventListener('click', () => openChat(chat.roomId, chat.name, chat.participants, chat.isGroup));
+            chatItem.addEventListener('click', () => openChat(chat.roomId, chat.name, chat.participants, chat.isGroup, [chat.emails]));
             chatList.appendChild(chatItem);
         });
     }
 
-    function openChat(roomId, chatName, participants, emails, isGroup) {
+    function openChat(roomId, chatName, participants, isGroup, emails) {
         currentRoomId = roomId;
         const chatArea = document.getElementById('chatArea');
         chatArea.innerHTML = `
             <div class="chat-header">
                 <div class="chat-title">${participants.filter(p => p !== currentUser.username).join(', ')}</div>
                 <div class="chat-actions">
-                    ${isGroup ? '<button class="add-user-btn"><i class="fas fa-user-plus"></i></button>' : ''}
-                    <button class="delete-chat-btn"><i class="fas fa-trash"></i></button>
+                    <button class="delete-chat-btn" title="Leave chat" id="leaveChat"><i class="fas fa-trash"></i></button>
                 </div>
             </div>
             <div class="chat-messages" id="chatMessages"></div>
@@ -268,7 +267,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button id="sendButton">Send</button>
             </div>
         `;
-
+        document.getElementById('leaveChat').addEventListener('click',(event) => {
+            LeaveChat(currentUser.email, currentRoomId);
+        });
         document.getElementById('sendButton').addEventListener('click', sendMessage);
         document.getElementById('messageInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
@@ -276,12 +277,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        if (isGroup) {
-            document.querySelector('.add-user-btn').addEventListener('click', () => addUserToGroup(roomId));
-        }
-
-        socket.emit('join chat', roomId);
+        socket.emit('join chat', roomId, currentUser, emails);
         fetchPreviousMessages(roomId);
+    }
+
+    async function LeaveChat(email, roomId) {
+        try {
+            await fetch(`/api/chats/${roomId}/leaveChat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ email }),
+            })
+            fetchChatList()
+        } catch (error) {
+            console.error('Error adding user:', error);
+            alert('Failed to Leave.');
+        }
     }
 
     async function fetchPreviousMessages(roomId) {

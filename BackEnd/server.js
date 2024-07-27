@@ -1,3 +1,6 @@
+// install requiremnets:
+// npm install express socket.io mongoose bcrypt body-parser
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -67,6 +70,7 @@ app.post('/register', async (req, res) => {
 
 app.get('/api/users/search', async (req, res) => {    
   try {
+    // return all users username and email
     const searchTerm = req.query.term;
     const users = await User.find({ 
       $or: [
@@ -82,12 +86,9 @@ app.get('/api/users/search', async (req, res) => {
 });
 
 app.post('/api/chats', async (req, res) => {
-  try {
+  try { 
+    // create chats, or group chats
     const { participants, emails, name, isGroup } = req.body;
-    
-    if (!isGroup && participants.length !== 2) {
-      return res.status(400).json({ message: 'Non-group chats must have exactly 2 participants' });
-    }
 
     const roomId = isGroup ? 
       `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : 
@@ -104,8 +105,7 @@ app.post('/api/chats', async (req, res) => {
         isGroup
       });
       await chat.save();
-    }
-
+    } 
     res.json(chat);
   } catch (error) {
     console.error(error);
@@ -115,6 +115,7 @@ app.post('/api/chats', async (req, res) => {
 
 app.get('/api/chats/:userEmail', async (req, res) => {
   try {
+    // return all chats currentUser is in
     const userEmail = req.params.userEmail;
     const chats = await Chat.find({ emails: userEmail});
     res.json(chats);
@@ -127,11 +128,36 @@ app.get('/api/chats/:userEmail', async (req, res) => {
 
 app.get('/api/messages/:roomId', async (req, res) => {
   try {
+    // return all messages in specific roomId
     const roomId = req.params.roomId;
     const messages = await Message.find({ roomId }).sort('timestamp');
     res.json(messages);
   } catch (error) {
     console.error('Error fetching messages:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+app.post('/api/chats/:roomId/leaveChat', async (req, res) => {
+  console.log('here');
+  try {
+    const roomId = req.params.roomId;
+    const user = req.body;
+    console.log(user.email);
+
+    const result = await Chat.updateOne(
+      {roomId: roomId},
+      {$pull: {emails: user.email}}
+    );
+
+    if (result.modifiedCount > 0) {
+      res.json('ok');
+    } else {
+      res.status(404).json({ message: 'Chat room not found or user not in the chat' });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    console.log('fail');
     res.status(500).json({ message: 'Server error' });
   }
 });
@@ -163,30 +189,49 @@ app.post('/api/chats/:roomId/addUser', async (req, res) => {
 });
 
 io.on('connection', (socket) => {
-  console.log('A user connected');
-  
-
   socket.on('user', (roomId) => {
+    // each user is put in their own room when they connect to server
+    
       socket.join(roomId);
       console.log(`User joined: ${roomId}`);
   });
 
   socket.on('new chat', (roomId) => {
+    // updates chatList when another user opens a new chat with you
     io.to(roomId).emit('new chat');
-    console.log(`User joined chat: ${roomId}`);
+    console.log(`User alerted: ${roomId}`);
 });
 
-  socket.on('join chat', (roomId) => {
-    socket.join(roomId);
-    io.to(roomId).emit('join chat');
-    console.log(`User joined room: ${roomId}`);
-  });
+socket.on('join chat', async (roomId, currentUser, emails) => {
+  // When selecting a chat join that room id to receive realtime messages
+  socket.join(roomId);
+  const email = currentUser.email;
+  console.log(email);
+  
+  // Check if emails is an array and not null/undefined
+  if (Array.isArray(emails)) {
+    if (!emails.includes(email)) {
+      const result = await Chat.updateOne(
+        {roomId: roomId},
+        {$push: {emails: email}}
+      );
+      console.log(result);
+    }
+  } else {
+    console.log('not array');
+    
+  }
+  
+  io.to(roomId).emit('join chat');
+  console.log(`User joined room: ${roomId}`);
+});
 
   socket.on('chat message', async (data) => {
     const { roomId, sender, content } = data;
     
     try {
       const newMessage = new Message({
+        // save message to database
         roomId,
         sender,
         content
@@ -194,6 +239,7 @@ io.on('connection', (socket) => {
       await newMessage.save();
 
       io.to(roomId).emit('chat message', {
+        // return message to all users in this chat
         roomId,
         sender,
         content,
