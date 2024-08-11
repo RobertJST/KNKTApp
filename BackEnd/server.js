@@ -13,6 +13,7 @@ const path = require('path');
 const Chat = require('./../models/Chat');
 const User = require('./../models/User');
 const Message = require('./../models/Message');
+const { resolve6 } = require('dns');
 
 const app = express();
 const server = http.createServer(app);
@@ -32,6 +33,7 @@ app.get('/', (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
+  // verifies use credentials
   const { email, password } = req.body;
   const user = await User.findOne({ email });
   if (user && await bcrypt.compare(password, user.password)) {
@@ -49,6 +51,7 @@ app.post('/login', async (req, res) => {
 });
 
 app.post('/register', async (req, res) => {
+  // registers new users
   const { username, email, password } = req.body;
   
   try {
@@ -109,7 +112,7 @@ app.post('/api/chats', async (req, res) => {
     res.json(chat);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    res.json({ message: 'Server error' });
   }
 });
 
@@ -121,7 +124,7 @@ app.get('/api/chats/:userEmail', async (req, res) => {
     res.json(chats);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    res.json({ message: 'Server error' });
   }
 });
 
@@ -134,7 +137,7 @@ app.get('/api/messages/:roomId', async (req, res) => {
     res.json(messages);
   } catch (error) {
     console.error('Error fetching messages:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.json({ message: 'Server error' });
   }
 });
 
@@ -143,42 +146,23 @@ app.post('/api/chats/:roomId/leaveChat', async (req, res) => {
     const roomId = req.params.roomId;
     const user = req.body;
 
-    const result = await Chat.updateOne(
-      {roomId: roomId},
-      {$pull: {emails: user.email}}
+    const result = await Chat.findOneAndUpdate(
+      { roomId: roomId },
+      {
+        $pull: { emails: user.email },
+        $addToSet: { removedUsers: user.email }
+      },
+      { new: true }
     );
 
-    if (result.modifiedCount > 0) {
-      res.json('ok');
+    if (result) {
+      res.json(result);
     } else {
       res.status(404).json({ message: 'Chat room not found or user not in the chat' });
     }
   } catch (error) {
     console.error('Error:', error);
-    console.log('fail');
-    res.status(500).json({ message: 'Server error' });
-  }
-});
-
-app.post('/api/chats/:roomId/addUser', async (req, res) => {
-  try {
-    const { roomId } = req.params;
-    const { userEmail } = req.body;
-
-    const chat = await Chat.findOne({ roomId });
-    if (!chat) {
-      return res.status(404).json({ message: 'Chat not found' });
-    }
-
-    if (!chat.participants.includes(userEmail)) {
-      chat.participants.push(userEmail);
-      await chat.save();
-    }
-
-    res.json(chat);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
+    res.json({ message: 'Server error' });
   }
 });
 
@@ -187,14 +171,17 @@ io.on('connection', (socket) => {
     // each user is put in their own room when they connect to server
     
       socket.join(roomId);
-      console.log(`User joined: ${roomId}`);
   });
 
   socket.on('new chat', (roomId) => {
     // updates chatList when another user opens a new chat with you
     io.to(roomId).emit('new chat');
-    console.log(`User alerted: ${roomId}`);
-});
+  })
+
+  socket.on('leave chat', (roomId) => {
+    // removes user from room
+    socket.leave(roomId);
+  })
 
 socket.on('join chat', async (roomId, currentUser) => {
   socket.join(roomId);
@@ -204,46 +191,89 @@ socket.on('join chat', async (roomId, currentUser) => {
       console.log(`Chat room ${roomId} not found`);
       return;
     }
-    if (!chat.emails.includes(currentUser.email)) {
-      await Chat.updateOne({ roomId }, { $addToSet: { emails: currentUser.email } });
+    // If the user was previously removed, add them back
+    if (chat.removedUsers.includes(currentUser.email)) {
+      await Chat.updateOne(
+        { roomId },
+        {
+          $pull: { removedUsers: currentUser.email },
+          $addToSet: { emails: currentUser.email }
+        }
+      );
+    } else if (!chat.emails.includes(currentUser.email)) {
+      // If the user wasn't in the chat before, add them
+      await Chat.updateOne(
+        { roomId },
+        { $addToSet: { emails: currentUser.email } }
+      );
     }
+
+    // For one-on-one conversations, add the other user back if they were removed
+    if (!chat.isGroup && chat.emails.length < 2 && chat.removedUsers.length > 0) {
+      chat.removedUsers.forEach(async user => {
+        await Chat.updateOne(
+        { roomId },
+        {
+          $pull: { removedUsers: user },
+          $addToSet: { emails: user }
+        }
+      );
+    
+      })
+     }
     io.to(roomId).emit('join chat');
-    console.log(`User joined room: ${roomId}`);
   } catch (error) {
     console.error('Join chat error:', error);
   }
 });
 
-  socket.on('chat message', async (data) => {
-    const { roomId, sender, senderEmail, content } = data;
+
+
+socket.on('chat message', async (data) => {
+  const { roomId, sender, senderEmail, content } = data;
+  try {
     const chat = await Chat.findOne({ roomId });
-
-    try {
-      const newMessage = new Message({
-        // save message to database
-        roomId,
-        sender,
-        senderEmail,
-        content
-      });
-      await newMessage.save();
-
-      io.to(roomId).emit('chat message', {
-        // return message to all users in this chat
-        roomId,
-        sender,
-        senderEmail,
-        content,
-        timestamp: newMessage.timestamp
-      });
-    } catch (error) {
-      console.error('Error saving message:', error);
+    if (!chat) {
+      console.log(`Chat room ${roomId} not found`);
+      return;
     }
-  });
+
+    // for one on one conversations, add the other user back if they were removed
+    if (!chat.isGroup && chat.emails.length === 1 && chat.removedUsers.length > 0) {
+      chat.removedUsers.forEach(async user => {
+        await Chat.updateOne(
+        { roomId },
+        {
+          $pull: { removedUsers: user },
+          $addToSet: { emails: user }
+        }
+      );
+    
+      })
+     } 
+
+    const newMessage = new Message({
+      roomId,
+      sender,
+      senderEmail,
+      content
+    });
+    await newMessage.save();
+
+    io.to(roomId).emit('chat message', {
+      roomId,
+      sender,
+      senderEmail,
+      content,
+      timestamp: newMessage.timestamp
+    });
+  } catch (error) {
+    console.error('Error saving message:', error);
+  }
+});
 
   socket.on('disconnect', () => {
     console.log('User disconnected');
   });
 });
-
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentUser;
     let currentRoomId;
     let lastMessage;
+    let lastRoom = '';
 
     const userString = localStorage.getItem('user');
     currentUser = JSON.parse(userString);
@@ -24,7 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let grouping = false;
     groupBtn.addEventListener('click', createGroup);
 
-    function createGroup(){
+    function clearChat() {
+        // clears the chat area, including title and messages displayed
         groups.innerHTML = '<button id="cancelBtn">Cancel</button><button id="createBtn">Create</button>';
         chatArea.innerHTML = `
             <div class="chat-header">
@@ -38,6 +40,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button id="sendButton">Send</button>
             </div>
         `;
+    }
+
+    function createGroup(){
+        // brings up the create group menu, clears current open chat
+        clearChat();
         document.getElementById('cancelBtn').addEventListener('click', cancelGroup);
         grouping = true;
         userSearch.value = '';   
@@ -46,6 +53,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function cancelGroup(){
+        // leaves the create group menu, removes any selected users from list
         groups.innerHTML = '<button id="groupBtn">Create Group</button>';
         document.getElementById('groupBtn').addEventListener('click', createGroup);
         grouping = false;
@@ -57,17 +65,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function Create() {
+        // creates a group chat or chat if more than one user is selected
         let names = [];
         let emails = [];
         newGroupMembers.forEach(member => {
             names.push(member.username);
             emails.push(member.email);
         })
-        createOrOpenChat(emails, names);
-        socket.emit('new chat', );
+        if (names.length > 0) {
+            createOrOpenChat(emails, names);
+        }
     }
 
     async function searchUsers() {
+        // looks up users with similar names to search input value
         const searchTerm = userSearch.value.trim();
         if (searchTerm === '') {
             if (grouping === false) {
@@ -95,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displaySearchResults(users) {
+        // displays the results of users seacrhed
         chatList.innerHTML = '';
         users.forEach(user => {
             if (user.email !== currentUser.email) {
@@ -106,6 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function createUserItem(user) {
+        // creates clickable user items, used for opening chats or selecting users for grouping
         const userItem = document.createElement('div');
         userItem.classList.add('chat-item');
         
@@ -135,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function createOrOpenChat(otherUserEmails, otherNames,  chatName = '', isGroup = false) {
+        // creates chat or opens if one already exists
         try {
             const participants = [currentUser.username, ...otherNames];
             if (participants.length > 2) {
@@ -168,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchChatList() {
+        // gets list of all chats user is currently in
         try {
             const response = await fetch(`/api/chats/${currentUser.email}`, {
                 method: 'GET',
@@ -183,6 +198,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function fetchSelected() {
+        // used when grouping, when user clears the search bar, all users selected while searching are displayed
         chatList.innerHTML = '';
         newGroupMembers.forEach(user => {
             const userItem = document.createElement('div');
@@ -208,6 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function selectUser(users, userItem) {
+        // select or deselect a user and add them to a list for grouping
         if (!newGroupMembers.find(member => member.username === users.username)) {
             userItem.classList.add('selected');
             newGroupMembers.push(users);
@@ -229,6 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function displayChatList(chats) {
+        // displays all open chats as clickable objects
         chatList.innerHTML = '';
         chats.forEach(chat => {
             const chatItem = document.createElement('div');
@@ -256,6 +274,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function openChat(roomId, chatName, participants, isGroup, emails) {
+        // opens chat areas, fetches messages and displays names
         currentRoomId = roomId;
         const chatArea = document.getElementById('chatArea');
         chatArea.innerHTML = `
@@ -271,6 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 <button id="sendButton">Send</button>
             </div>
         `;
+
         document.getElementById('leaveChat').addEventListener('click',(event) => {
             LeaveChat(currentUser.email, currentRoomId);
         });
@@ -280,12 +300,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 sendMessage();
             }
         });
-
+        if (lastRoom !== '') {
+            socket.emit('leave chat', lastRoom);
+        }
         socket.emit('join chat', roomId, currentUser);
         fetchPreviousMessages(roomId);
+        lastRoom = roomId;
     }
 
     async function LeaveChat(email, roomId) {
+        // removes user from a chat
         try {
             await fetch(`/api/chats/${roomId}/leaveChat`, {
                 method: 'POST',
@@ -294,7 +318,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({ email }),
             })
-            fetchChatList()
+            await fetchChatList();
+            clearChat();
+            socket.emit('leave chat', currentUser.email, roomId);
         } catch (error) {
             console.error('Error adding user:', error);
             alert('Failed to Leave.');
@@ -320,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function fetchPreviousMessages(roomId) {
             try {
-                // finds messages from room id
+                // finds messages using room id
                 const response = await fetch(`/api/messages/${roomId}`);
                 const messages = await response.json();
                 displayMessages(messages);
@@ -330,6 +356,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
     function displayMessages(messages) {
+        // displays all messages
         const chatMessages = document.getElementById('chatMessages');
         chatMessages.innerHTML = '';
         messages.forEach(message => {
@@ -370,6 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('new chat', fetchChatList);
 
     function debounce(func, delay) {
+        // adds delay to search function
         let timeoutId;
         return function (...args) {
             clearTimeout(timeoutId);
