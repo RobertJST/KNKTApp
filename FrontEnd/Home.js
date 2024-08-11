@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentUser;
     let currentRoomId;
+    let lastMessage;
 
     const userString = localStorage.getItem('user');
     currentUser = JSON.parse(userString);
@@ -242,6 +243,9 @@ document.addEventListener('DOMContentLoaded', () => {
             emailElement.classList.add('chat-item-email');
             emailElement.textContent = chat.emails.filter(p => p !== currentUser.email).join(', ');
             // displays the emails of all users in thet chat other than current user
+            if (emailElement.textContent === '') {
+                emailElement.textContent = '...'
+            }
             
             chatItem.appendChild(nameElement);
             chatItem.appendChild(emailElement);
@@ -277,7 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        socket.emit('join chat', roomId, currentUser, emails);
+        socket.emit('join chat', roomId, currentUser);
         fetchPreviousMessages(roomId);
     }
 
@@ -297,31 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function fetchPreviousMessages(roomId) {
-        try {
-            // finds messages from room id
-            const response = await fetch(`/api/messages/${roomId}`);
-            const messages = await response.json();
-            displayMessages(messages);
-        } catch (error) {
-            console.error('Error fetching messages:', error);
-        }
-    }
-
-    function displayMessages(messages) {
-        const chatMessages = document.getElementById('chatMessages');
-        chatMessages.innerHTML = '';
-        messages.forEach(message => {
-            // adds each messages, checks wether current user sent or recieved message
-            const messageElement = document.createElement('div');
-            messageElement.classList.add('message-bubble', message.sender === currentUser.email ? 'sent' : 'received');
-            messageElement.textContent = `${message.content}`;
-            chatMessages.appendChild(messageElement);
-
-
-        });
-        chatMessages.scrollTop = chatMessages.scrollHeight;
-    }
+    
 
     function sendMessage() {
         // sends message using socket using room id
@@ -330,46 +310,64 @@ document.addEventListener('DOMContentLoaded', () => {
         if (content && currentRoomId) {
             socket.emit('chat message', {
                 roomId: currentRoomId,
-                sender: currentUser.email,
+                sender: currentUser.username,
+                senderEmail: currentUser.email,
                 content: content
             });
             messageInput.value = '';
         }
     }
 
+    async function fetchPreviousMessages(roomId) {
+            try {
+                // finds messages from room id
+                const response = await fetch(`/api/messages/${roomId}`);
+                const messages = await response.json();
+                displayMessages(messages);
+            } catch (error) {
+                console.error('Error fetching messages:', error);
+            }
+        }
+
+    function displayMessages(messages) {
+        const chatMessages = document.getElementById('chatMessages');
+        chatMessages.innerHTML = '';
+        messages.forEach(message => {
+            // adds each messages, checks wether current user sent or recieved message
+            const messageElement = document.createElement('div');
+            messageElement.classList.add('message-bubble', message.senderEmail === currentUser.email ? 'sent' : 'received');
+            messageElement.textContent = `${message.content}`;
+            if (lastMessage !== message.senderEmail && message.senderEmail !== currentUser.email) {
+                const senderElement = document.createElement('div');
+                senderElement.classList.add('senderName');
+                senderElement.textContent = `${message.sender}`;
+                chatMessages.appendChild(senderElement);
+            }
+            chatMessages.appendChild(messageElement);
+
+            lastMessage = message.senderEmail;
+        });
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
     socket.on('chat message', (data) => {
         const chatMessages = document.getElementById('chatMessages');
         const messageElement = document.createElement('div');
-        messageElement.classList.add('message-bubble', data.sender === currentUser.email ? 'sent' : 'received');
+        messageElement.classList.add('message-bubble', data.senderEmail === currentUser.email ? 'sent' : 'received');
         //check if current user is the one who sent the message
         messageElement.textContent = `${data.content}`;
+        if (lastMessage !== data.senderEmail && data.senderEmail !== currentUser.email) {
+            const senderElement = document.createElement('div');
+            senderElement.classList.add('senderName');
+            senderElement.textContent = `${data.sender}`;
+            chatMessages.appendChild(senderElement);
+        }
         chatMessages.appendChild(messageElement);
+        lastMessage = data.senderEmail;
         chatMessages.scrollTop = chatMessages.scrollHeight;
     });
 
     socket.on('new chat', fetchChatList);
-
-    async function addUserToGroup(roomId) {
-        // not implented yet
-        const userEmail = prompt("Enter the email of the user you want to add:");
-        if (userEmail) {
-            try {
-                const response = await fetch(`/api/chats/${roomId}/addUser`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ userEmail }),
-                });
-                const updatedChat = await response.json();
-                alert(`User ${userEmail} added to the chat.`);
-                // Optionally, update the chat display here
-            } catch (error) {
-                console.error('Error adding user:', error);
-                alert('Failed to add user to the group.');
-            }
-        }
-    }
 
     function debounce(func, delay) {
         let timeoutId;

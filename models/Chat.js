@@ -6,7 +6,8 @@ const ChatSchema = new mongoose.Schema({
     name: String,
     participants: [String],
     emails: [String],
-    isGroup: { type: Boolean, default: false }
+    isGroup: { type: Boolean, default: false },
+    removedUsers: [String]
 });
 
 module.exports = mongoose.model('Chat', ChatSchema);

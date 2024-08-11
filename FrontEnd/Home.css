@@ -157,6 +157,12 @@
     overflow-y: auto;
 }
 
+.senderName {
+    padding-top: 10px;
+    color:#00977c;
+    font-size: .8em;
+}
+
 .message-input {
     display: flex;
     padding: 10px;

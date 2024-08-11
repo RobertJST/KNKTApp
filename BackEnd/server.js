@@ -89,10 +89,10 @@ app.post('/api/chats', async (req, res) => {
   try { 
     // create chats, or group chats
     const { participants, emails, name, isGroup } = req.body;
-
+    // randomize group chats ids, one on one chat ids are constant
     const roomId = isGroup ? 
       `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` : 
-      `${participants.sort().join('_')}`.replace(/[@.]/g, '_');
+      `${emails.sort().join('_')}`.replace(/[@.]/g, '_');
 
     let chat = await Chat.findOne({ roomId });
 
@@ -139,11 +139,9 @@ app.get('/api/messages/:roomId', async (req, res) => {
 });
 
 app.post('/api/chats/:roomId/leaveChat', async (req, res) => {
-  console.log('here');
   try {
     const roomId = req.params.roomId;
     const user = req.body;
-    console.log(user.email);
 
     const result = await Chat.updateOne(
       {roomId: roomId},
@@ -172,10 +170,6 @@ app.post('/api/chats/:roomId/addUser', async (req, res) => {
       return res.status(404).json({ message: 'Chat not found' });
     }
 
-    if (!chat.isGroup) {
-      return res.status(400).json({ message: 'Cannot add users to non-group chats' });
-    }
-
     if (!chat.participants.includes(userEmail)) {
       chat.participants.push(userEmail);
       await chat.save();
@@ -202,38 +196,34 @@ io.on('connection', (socket) => {
     console.log(`User alerted: ${roomId}`);
 });
 
-socket.on('join chat', async (roomId, currentUser, emails) => {
-  // When selecting a chat join that room id to receive realtime messages
+socket.on('join chat', async (roomId, currentUser) => {
   socket.join(roomId);
-  const email = currentUser.email;
-  console.log(email);
-  
-  // Check if emails is an array and not null/undefined
-  if (Array.isArray(emails)) {
-    if (!emails.includes(email)) {
-      const result = await Chat.updateOne(
-        {roomId: roomId},
-        {$push: {emails: email}}
-      );
-      console.log(result);
+  try {
+    const chat = await Chat.findOne({ roomId });
+    if (!chat) {
+      console.log(`Chat room ${roomId} not found`);
+      return;
     }
-  } else {
-    console.log('not array');
-    
+    if (!chat.emails.includes(currentUser.email)) {
+      await Chat.updateOne({ roomId }, { $addToSet: { emails: currentUser.email } });
+    }
+    io.to(roomId).emit('join chat');
+    console.log(`User joined room: ${roomId}`);
+  } catch (error) {
+    console.error('Join chat error:', error);
   }
-  
-  io.to(roomId).emit('join chat');
-  console.log(`User joined room: ${roomId}`);
 });
 
   socket.on('chat message', async (data) => {
-    const { roomId, sender, content } = data;
-    
+    const { roomId, sender, senderEmail, content } = data;
+    const chat = await Chat.findOne({ roomId });
+
     try {
       const newMessage = new Message({
         // save message to database
         roomId,
         sender,
+        senderEmail,
         content
       });
       await newMessage.save();
@@ -242,6 +232,7 @@ socket.on('join chat', async (roomId, currentUser, emails) => {
         // return message to all users in this chat
         roomId,
         sender,
+        senderEmail,
         content,
         timestamp: newMessage.timestamp
       });
